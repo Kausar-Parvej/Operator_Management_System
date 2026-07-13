@@ -4,8 +4,9 @@ if (!config.url || !config.anonKey || config.url.includes('YOUR_') || config.ano
   console.error('Supabase config is not set yet. Update config.js with your real project URL and anon key.');
 }
 
+const normalizedUrl = (config.url || '').trim().replace(/\/+$/, '').replace(/\/rest\/v1\/?$/, '');
 const supabaseClient = (window.supabase && typeof window.supabase.createClient === 'function')
-  ? window.supabase.createClient(config.url || '', config.anonKey || '')
+  ? window.supabase.createClient(normalizedUrl, config.anonKey || '')
   : null;
 
 let currentUser = null;
