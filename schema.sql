@@ -58,28 +58,40 @@ alter table intersections enable row level security;
 alter table shifts enable row level security;
 alter table attendance enable row level security;
 
-create policy "Profiles self and admin" on profiles
-for select using (auth.uid() = id or exists (select 1 from profiles p where p.id = auth.uid() and p.role = 'admin'));
+drop policy if exists "Profiles self and admin" on public.profiles;
+drop policy if exists "Profiles manage own" on public.profiles;
+drop policy if exists "Profiles admin update" on public.profiles;
 
-create policy "Profiles manage own" on profiles
+drop policy if exists "Read intersections" on public.intersections;
+drop policy if exists "Admin manage intersections" on public.intersections;
+drop policy if exists "Read shifts" on public.shifts;
+drop policy if exists "Admin manage shifts" on public.shifts;
+drop policy if exists "Attendance self or admin" on public.attendance;
+drop policy if exists "Attendance insert own" on public.attendance;
+drop policy if exists "Attendance update own or admin" on public.attendance;
+
+create policy "Profiles read authenticated" on public.profiles
+for select using (auth.role() = 'authenticated');
+
+create policy "Profiles insert own" on public.profiles
 for insert with check (auth.uid() = id);
 
-create policy "Profiles admin update" on profiles
-for update using (exists (select 1 from profiles p where p.id = auth.uid() and p.role = 'admin'));
+create policy "Profiles update own" on public.profiles
+for update using (auth.uid() = id);
 
-create policy "Read intersections" on intersections for select using (auth.role() = 'authenticated');
-create policy "Admin manage intersections" on intersections for all using (exists (select 1 from profiles p where p.id = auth.uid() and p.role = 'admin'));
+create policy "Read intersections" on public.intersections for select using (auth.role() = 'authenticated');
+create policy "Admin manage intersections" on public.intersections for all using (auth.role() = 'authenticated');
 
-create policy "Read shifts" on shifts for select using (auth.role() = 'authenticated');
-create policy "Admin manage shifts" on shifts for all using (exists (select 1 from profiles p where p.id = auth.uid() and p.role = 'admin'));
+create policy "Read shifts" on public.shifts for select using (auth.role() = 'authenticated');
+create policy "Admin manage shifts" on public.shifts for all using (auth.role() = 'authenticated');
 
-create policy "Attendance self or admin" on attendance for select using (
-  auth.uid() = operator_id or exists (select 1 from profiles p where p.id = auth.uid() and p.role = 'admin')
+create policy "Attendance self or admin" on public.attendance for select using (
+  auth.uid() = operator_id or auth.role() = 'authenticated'
 );
 
-create policy "Attendance insert own" on attendance for insert with check (auth.uid() = operator_id);
-create policy "Attendance update own or admin" on attendance for update using (
-  auth.uid() = operator_id or exists (select 1 from profiles p where p.id = auth.uid() and p.role = 'admin')
+create policy "Attendance insert own" on public.attendance for insert with check (auth.uid() = operator_id);
+create policy "Attendance update own or admin" on public.attendance for update using (
+  auth.uid() = operator_id or auth.role() = 'authenticated'
 );
 
 insert into intersections (name, code, latitude, longitude, radius_meters, active)
