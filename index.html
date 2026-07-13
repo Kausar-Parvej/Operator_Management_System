@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Traffic Signal Operator System</title>
+    <link rel="stylesheet" href="styles.css" />
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  </head>
+  <body>
+    <main class="shell">
+      <section id="authSection" class="card auth-card">
+        <h1>Traffic Signal Ops</h1>
+        <p>Minimal attendance and shift tracking for operators.</p>
+        <form id="loginForm">
+          <input id="email" type="email" placeholder="Email" required />
+          <input id="password" type="password" placeholder="Password" required />
+          <button type="submit">Login</button>
+        </form>
+        <p id="message" class="message"></p>
+      </section>
+
+      <section id="appSection" class="hidden">
+        <header class="topbar">
+          <div>
+            <h2 id="welcomeTitle">Welcome</h2>
+            <p id="userMeta">Loading your workspace...</p>
+          </div>
+          <button id="logoutBtn" class="secondary">Logout</button>
+        </header>
+
+        <section id="operatorView" class="hidden">
+          <div class="card">
+            <h3>Operator Panel</h3>
+            <label for="intersectionSelect">Select Intersection</label>
+            <select id="intersectionSelect"></select>
+            <label for="shiftSelect">Select Shift</label>
+            <select id="shiftSelect"></select>
+            <div class="status-box" id="gpsStatus">GPS: waiting</div>
+            <div class="actions">
+              <button id="shiftInBtn">Shift In</button>
+              <button id="shiftOutBtn" class="secondary">Shift Out</button>
+            </div>
+            <p id="operatorMessage" class="message"></p>
+          </div>
+
+          <div class="card">
+            <h3>Recent Attendance</h3>
+            <div id="operatorHistory"></div>
+          </div>
+        </section>
+
+        <section id="adminView" class="hidden">
+          <div class="grid">
+            <div class="card metric">
+              <h3>Operators</h3>
+              <p id="metricOperators">0</p>
+            </div>
+            <div class="card metric">
+              <h3>Intersections</h3>
+              <p id="metricIntersections">0</p>
+            </div>
+            <div class="card metric">
+              <h3>Active Duty</h3>
+              <p id="metricActive">0</p>
+            </div>
+          </div>
+
+          <div class="card">
+            <h3>Live Duty List</h3>
+            <div id="adminList"></div>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <script src="config.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>

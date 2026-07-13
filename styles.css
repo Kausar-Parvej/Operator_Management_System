@@ -1,0 +1,85 @@
+:root {
+  color-scheme: light;
+  font-family: Inter, Arial, sans-serif;
+  background: #f5f7fb;
+  color: #14213d;
+}
+body {
+  margin: 0;
+  background: linear-gradient(135deg, #f7f9fc, #eef3ff);
+}
+.shell {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 24px;
+}
+.card {
+  background: white;
+  border-radius: 16px;
+  padding: 20px;
+  box-shadow: 0 10px 30px rgba(20, 33, 61, 0.08);
+  margin-bottom: 16px;
+}
+.auth-card {
+  margin-top: 60px;
+}
+form {
+  display: grid;
+  gap: 12px;
+}
+input, select, button {
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid #cfd8e3;
+  font-size: 15px;
+}
+button {
+  cursor: pointer;
+  background: #2563eb;
+  color: white;
+  border: none;
+}
+button.secondary {
+  background: #64748b;
+}
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+.grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+.metric p {
+  font-size: 28px;
+  font-weight: 700;
+  margin: 8px 0 0;
+}
+.actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 12px;
+}
+.status-box {
+  margin-top: 12px;
+  padding: 10px 12px;
+  background: #eff6ff;
+  border-radius: 10px;
+}
+.message {
+  min-height: 20px;
+  color: #b91c1c;
+}
+.hidden {
+  display: none;
+}
+@media (max-width: 700px) {
+  .topbar {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+}
