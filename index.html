@@ -12,12 +12,24 @@
       <section id="authSection" class="card auth-card">
         <h1>Traffic Signal Ops</h1>
         <p>Minimal attendance and shift tracking for operators.</p>
+        <button id="showRegisterBtn" class="secondary">Register as Operator</button>
         <form id="loginForm">
           <input id="email" type="email" placeholder="Email" required />
           <input id="password" type="password" placeholder="Password" required />
           <button type="submit">Login</button>
         </form>
+        <form id="registerForm" class="hidden stack-form">
+          <input id="registerFullName" type="text" placeholder="Full name" required />
+          <input id="registerEmployeeId" type="text" placeholder="Employee ID" required />
+          <input id="registerMobile" type="text" placeholder="Mobile number" required />
+          <input id="registerEmail" type="email" placeholder="Email" required />
+          <input id="registerPassword" type="password" placeholder="Password" required />
+          <input id="registerConfirmPassword" type="password" placeholder="Confirm password" required />
+          <button type="submit">Submit Registration</button>
+          <button type="button" id="cancelRegisterBtn" class="secondary">Cancel</button>
+        </form>
         <p id="message" class="message"></p>
+        <p id="registerMessage" class="message"></p>
       </section>
 
       <section id="appSection" class="hidden">
@@ -64,6 +76,15 @@
               <h3>Active Duty</h3>
               <p id="metricActive">0</p>
             </div>
+            <div class="card metric">
+              <h3>Pending Approval</h3>
+              <p id="metricPending">0</p>
+            </div>
+          </div>
+
+          <div class="card">
+            <h3>Operator Approvals</h3>
+            <div id="approvalList" class="list-box"></div>
           </div>
 
           <div class="card">

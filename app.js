@@ -17,12 +17,16 @@ const appSection = document.getElementById('appSection');
 const operatorView = document.getElementById('operatorView');
 const adminView = document.getElementById('adminView');
 const loginForm = document.getElementById('loginForm');
+const registerForm = document.getElementById('registerForm');
 const messageBox = document.getElementById('message');
+const registerMessageBox = document.getElementById('registerMessage');
 const welcomeTitle = document.getElementById('welcomeTitle');
 const userMeta = document.getElementById('userMeta');
 const logoutBtn = document.getElementById('logoutBtn');
 const intersectionForm = document.getElementById('intersectionForm');
 const shiftForm = document.getElementById('shiftForm');
+const showRegisterBtn = document.getElementById('showRegisterBtn');
+const cancelRegisterBtn = document.getElementById('cancelRegisterBtn');
 
 let editingIntersectionId = null;
 let editingShiftId = null;
@@ -63,6 +67,22 @@ logoutBtn.addEventListener('click', async () => {
   appSection.classList.add('hidden');
 });
 
+showRegisterBtn.addEventListener('click', () => {
+  registerForm.classList.remove('hidden');
+  loginForm.classList.add('hidden');
+  showRegisterBtn.classList.add('hidden');
+  registerMessageBox.textContent = '';
+});
+
+cancelRegisterBtn.addEventListener('click', () => {
+  registerForm.classList.add('hidden');
+  loginForm.classList.remove('hidden');
+  showRegisterBtn.classList.remove('hidden');
+  registerForm.reset();
+  registerMessageBox.textContent = '';
+});
+
+registerForm.addEventListener('submit', handleOperatorRegistration);
 intersectionForm.addEventListener('submit', handleIntersectionSubmit);
 document.getElementById('cancelIntersectionEdit').addEventListener('click', resetIntersectionForm);
 shiftForm.addEventListener('submit', handleShiftSubmit);
@@ -94,6 +114,17 @@ async function loadProfile() {
   }
 
   currentProfile = profile;
+
+  if (profile.role !== 'admin' && profile.status !== 'active') {
+    messageBox.textContent = profile.status === 'pending'
+      ? 'Your operator account is pending admin approval.'
+      : 'Your account is not active yet.';
+    authSection.classList.remove('hidden');
+    appSection.classList.add('hidden');
+    await supabaseClient.auth.signOut();
+    return;
+  }
+
   welcomeTitle.textContent = `Welcome, ${profile.full_name || currentUser.email}`;
   userMeta.textContent = `${profile.role || 'operator'} • ${profile.employee_id || ''}`.trim();
 
@@ -279,10 +310,12 @@ async function loadAdminView() {
   const { count: operatorCount } = await supabaseClient.from('profiles').select('*', { count: 'exact', head: true }).eq('role', 'operator');
   const { count: intersectionCount } = await supabaseClient.from('intersections').select('*', { count: 'exact', head: true });
   const { count: activeCount } = await supabaseClient.from('attendance').select('*', { count: 'exact', head: true }).eq('status', 'on-duty');
+  const { count: pendingCount } = await supabaseClient.from('profiles').select('*', { count: 'exact', head: true }).eq('role', 'operator').eq('status', 'pending');
 
   document.getElementById('metricOperators').textContent = operatorCount || 0;
   document.getElementById('metricIntersections').textContent = intersectionCount || 0;
   document.getElementById('metricActive').textContent = activeCount || 0;
+  document.getElementById('metricPending').textContent = pendingCount || 0;
 
   const { data } = await supabaseClient
     .from('attendance')
@@ -300,7 +333,58 @@ async function loadAdminView() {
     </div>
   `).join('') : '<p>No duty records yet.</p>';
 
-  await Promise.all([loadIntersectionsList(), loadShiftsList()]);
+  await Promise.all([loadIntersectionsList(), loadShiftsList(), loadApprovalList()]);
+}
+
+async function loadApprovalList() {
+  const listBox = document.getElementById('approvalList');
+  const { data, error } = await supabaseClient
+    .from('profiles')
+    .select('*')
+    .eq('role', 'operator')
+    .eq('status', 'pending')
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    listBox.innerHTML = `<p>${error.message}</p>`;
+    return;
+  }
+
+  if (!data?.length) {
+    listBox.innerHTML = '<p>No pending registrations.</p>';
+    return;
+  }
+
+  listBox.innerHTML = data.map((row) => `
+    <div class="list-item">
+      <div>
+        <strong>${row.full_name || 'Operator'}</strong>
+        <div class="muted">${row.employee_id || '—'} • ${row.mobile || '—'}</div>
+      </div>
+      <div class="chip-row">
+        <button type="button" class="small" data-action="approve-operator" data-id="${row.id}">Approve</button>
+        <button type="button" class="danger small" data-action="reject-operator" data-id="${row.id}">Reject</button>
+      </div>
+    </div>
+  `).join('');
+
+  listBox.querySelectorAll('[data-action="approve-operator"]').forEach((button) => {
+    button.addEventListener('click', () => updateOperatorApproval(button.dataset.id, 'active'));
+  });
+
+  listBox.querySelectorAll('[data-action="reject-operator"]').forEach((button) => {
+    button.addEventListener('click', () => updateOperatorApproval(button.dataset.id, 'inactive'));
+  });
+}
+
+async function updateOperatorApproval(id, status) {
+  const { error } = await supabaseClient.from('profiles').update({ status }).eq('id', id);
+  if (error) {
+    document.getElementById('approvalList').innerHTML = `<p>${error.message}</p>`;
+    return;
+  }
+
+  await loadAdminView();
 }
 
 async function loadIntersectionsList() {
@@ -416,6 +500,54 @@ async function handleIntersectionSubmit(event) {
   messageBoxEl.textContent = editingIntersectionId ? 'Intersection updated.' : 'Intersection added.';
   resetIntersectionForm();
   await loadIntersectionsList();
+}
+
+async function handleOperatorRegistration(event) {
+  event.preventDefault();
+  const fullName = document.getElementById('registerFullName').value.trim();
+  const employeeId = document.getElementById('registerEmployeeId').value.trim();
+  const mobile = document.getElementById('registerMobile').value.trim();
+  const email = document.getElementById('registerEmail').value.trim();
+  const password = document.getElementById('registerPassword').value;
+  const confirmPassword = document.getElementById('registerConfirmPassword').value;
+
+  if (!fullName || !employeeId || !mobile || !email || !password || !confirmPassword) {
+    registerMessageBox.textContent = 'All fields are required.';
+    return;
+  }
+
+  if (password !== confirmPassword) {
+    registerMessageBox.textContent = 'Passwords do not match.';
+    return;
+  }
+
+  const { data: signUpData, error: signUpError } = await supabaseClient.auth.signUp({ email, password });
+  if (signUpError) {
+    registerMessageBox.textContent = signUpError.message;
+    return;
+  }
+
+  if (signUpData?.user) {
+    const { error: profileError } = await supabaseClient.from('profiles').insert([{ 
+      id: signUpData.user.id,
+      role: 'operator',
+      full_name: fullName,
+      employee_id: employeeId,
+      mobile,
+      status: 'pending'
+    }]);
+
+    if (profileError) {
+      registerMessageBox.textContent = profileError.message;
+      return;
+    }
+  }
+
+  registerMessageBox.textContent = 'Registration submitted. Please wait for admin approval.';
+  registerForm.reset();
+  registerForm.classList.add('hidden');
+  loginForm.classList.remove('hidden');
+  showRegisterBtn.classList.remove('hidden');
 }
 
 async function handleShiftSubmit(event) {

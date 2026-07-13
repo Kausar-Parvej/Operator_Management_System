@@ -76,8 +76,11 @@ for select using (auth.role() = 'authenticated');
 create policy "Profiles insert own" on public.profiles
 for insert with check (auth.uid() = id);
 
-create policy "Profiles update own" on public.profiles
-for update using (auth.uid() = id);
+create policy "Profiles update own or admin" on public.profiles
+for update using (auth.uid() = id or exists (
+  select 1 from public.profiles admin_profile
+  where admin_profile.id = auth.uid() and admin_profile.role = 'admin'
+));
 
 create policy "Read intersections" on public.intersections for select using (auth.role() = 'authenticated');
 create policy "Admin manage intersections" on public.intersections for all using (auth.role() = 'authenticated');

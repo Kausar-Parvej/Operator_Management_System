@@ -42,6 +42,9 @@ button {
 button.secondary {
   background: #64748b;
 }
+button.hidden {
+  display: none;
+}
 .topbar {
   display: flex;
   justify-content: space-between;
