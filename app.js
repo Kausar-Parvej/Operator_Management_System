@@ -27,9 +27,23 @@ const intersectionForm = document.getElementById('intersectionForm');
 const shiftForm = document.getElementById('shiftForm');
 const showRegisterBtn = document.getElementById('showRegisterBtn');
 const cancelRegisterBtn = document.getElementById('cancelRegisterBtn');
+const registerSubmitBtn = document.getElementById('registerSubmitBtn');
 
 let editingIntersectionId = null;
 let editingShiftId = null;
+let registrationCooldownUntil = 0;
+
+function updateRegistrationButtonState() {
+  const isCoolingDown = Date.now() < registrationCooldownUntil;
+  registerSubmitBtn.disabled = isCoolingDown;
+  registerSubmitBtn.textContent = isCoolingDown ? 'Please wait...' : 'Submit Registration';
+}
+
+function startRegistrationCooldown(seconds = 60) {
+  registrationCooldownUntil = Date.now() + seconds * 1000;
+  updateRegistrationButtonState();
+  window.setTimeout(updateRegistrationButtonState, seconds * 1000);
+}
 
 function ensureSupabaseReady() {
   if (!supabaseClient) {
@@ -72,6 +86,7 @@ showRegisterBtn.addEventListener('click', () => {
   loginForm.classList.add('hidden');
   showRegisterBtn.classList.add('hidden');
   registerMessageBox.textContent = '';
+  updateRegistrationButtonState();
 });
 
 cancelRegisterBtn.addEventListener('click', () => {
@@ -80,6 +95,7 @@ cancelRegisterBtn.addEventListener('click', () => {
   showRegisterBtn.classList.remove('hidden');
   registerForm.reset();
   registerMessageBox.textContent = '';
+  updateRegistrationButtonState();
 });
 
 registerForm.addEventListener('submit', handleOperatorRegistration);
@@ -333,7 +349,37 @@ async function loadAdminView() {
     </div>
   `).join('') : '<p>No duty records yet.</p>';
 
-  await Promise.all([loadIntersectionsList(), loadShiftsList(), loadApprovalList()]);
+  await Promise.all([loadOperatorList(), loadIntersectionsList(), loadShiftsList(), loadApprovalList()]);
+}
+
+async function loadOperatorList() {
+  const listBox = document.getElementById('operatorList');
+  const { data, error } = await supabaseClient
+    .from('profiles')
+    .select('*')
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    listBox.innerHTML = `<p>${error.message}</p>`;
+    return;
+  }
+
+  if (!data?.length) {
+    listBox.innerHTML = '<p>No operators yet.</p>';
+    return;
+  }
+
+  listBox.innerHTML = data.map((row) => `
+    <div class="list-item">
+      <div>
+        <strong>${row.full_name || 'Operator'}</strong>
+        <div class="muted">${row.employee_id || '—'} • ${row.mobile || '—'} • ${row.role || 'operator'}</div>
+      </div>
+      <div class="chip-row">
+        <span class="pill">${row.status || 'active'}</span>
+      </div>
+    </div>
+  `).join('');
 }
 
 async function loadApprovalList() {
@@ -504,6 +550,12 @@ async function handleIntersectionSubmit(event) {
 
 async function handleOperatorRegistration(event) {
   event.preventDefault();
+
+  if (Date.now() < registrationCooldownUntil) {
+    registerMessageBox.textContent = 'Too many signup attempts. Please wait a minute and try again.';
+    return;
+  }
+
   const fullName = document.getElementById('registerFullName').value.trim();
   const employeeId = document.getElementById('registerEmployeeId').value.trim();
   const mobile = document.getElementById('registerMobile').value.trim();
@@ -521,6 +573,9 @@ async function handleOperatorRegistration(event) {
     return;
   }
 
+  startRegistrationCooldown(60);
+  registerSubmitBtn.textContent = 'Submitting...';
+
   const { data: signUpData, error: signUpError } = await supabaseClient.auth.signUp({
     email,
     password,
@@ -536,7 +591,14 @@ async function handleOperatorRegistration(event) {
   });
 
   if (signUpError) {
-    registerMessageBox.textContent = signUpError.message;
+    const message = signUpError.message || '';
+    if (message.toLowerCase().includes('rate limit') || message.toLowerCase().includes('rate-limit')) {
+      startRegistrationCooldown(120);
+      registerMessageBox.textContent = 'Signup is temporarily rate-limited by Supabase. Please wait about 2 minutes and try again.';
+    } else {
+      registerMessageBox.textContent = message;
+    }
+    registerSubmitBtn.textContent = 'Submit Registration';
     return;
   }
 
@@ -545,6 +607,7 @@ async function handleOperatorRegistration(event) {
   } else {
     registerMessageBox.textContent = 'Registration submitted. Please check your email if confirmation is enabled.';
   }
+  registerSubmitBtn.textContent = 'Submit Registration';
   registerForm.reset();
   registerForm.classList.add('hidden');
   loginForm.classList.remove('hidden');
