@@ -377,9 +377,27 @@ async function loadOperatorList() {
       </div>
       <div class="chip-row">
         <span class="pill">${row.status || 'active'}</span>
+        ${row.role !== 'admin' ? `<button type="button" class="danger small" data-action="delete-operator" data-id="${row.id}">Remove</button>` : ''}
       </div>
     </div>
   `).join('');
+
+  listBox.querySelectorAll('[data-action="delete-operator"]').forEach((button) => {
+    button.addEventListener('click', () => deleteOperator(button.dataset.id));
+  });
+}
+
+async function deleteOperator(id) {
+  if (!window.confirm('Remove this operator?')) return;
+
+  const { error } = await supabaseClient.from('profiles').delete().eq('id', id);
+  if (error) {
+    document.getElementById('operatorList').innerHTML = `<p>${error.message}</p>`;
+    return;
+  }
+
+  await loadOperatorList();
+  await loadAdminView();
 }
 
 async function loadApprovalList() {
