@@ -48,6 +48,61 @@ button.secondary {
   align-items: center;
   margin-bottom: 16px;
 }
+.stack-form {
+  display: grid;
+  gap: 12px;
+}
+.form-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+.inline-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #334155;
+}
+.list-box {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+.list-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #f8fafc;
+}
+.chip-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.pill {
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #dbeafe;
+  color: #1d4ed8;
+  font-size: 13px;
+}
+.muted {
+  color: #64748b;
+  font-size: 13px;
+  margin-top: 4px;
+}
+button.small {
+  padding: 8px 10px;
+  font-size: 13px;
+}
+button.danger {
+  background: #dc2626;
+}
 .grid {
   display: grid;
   gap: 16px;

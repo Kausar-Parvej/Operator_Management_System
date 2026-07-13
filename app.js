@@ -21,6 +21,11 @@ const messageBox = document.getElementById('message');
 const welcomeTitle = document.getElementById('welcomeTitle');
 const userMeta = document.getElementById('userMeta');
 const logoutBtn = document.getElementById('logoutBtn');
+const intersectionForm = document.getElementById('intersectionForm');
+const shiftForm = document.getElementById('shiftForm');
+
+let editingIntersectionId = null;
+let editingShiftId = null;
 
 function ensureSupabaseReady() {
   if (!supabaseClient) {
@@ -57,6 +62,11 @@ logoutBtn.addEventListener('click', async () => {
   authSection.classList.remove('hidden');
   appSection.classList.add('hidden');
 });
+
+intersectionForm.addEventListener('submit', handleIntersectionSubmit);
+document.getElementById('cancelIntersectionEdit').addEventListener('click', resetIntersectionForm);
+shiftForm.addEventListener('submit', handleShiftSubmit);
+document.getElementById('cancelShiftEdit').addEventListener('click', resetShiftForm);
 
 supabaseClient.auth.onAuthStateChange(async (_event, session) => {
   if (!session) {
@@ -289,6 +299,231 @@ async function loadAdminView() {
       <div>In: ${row.shift_in_at ? new Date(row.shift_in_at).toLocaleString() : '—'}</div>
     </div>
   `).join('') : '<p>No duty records yet.</p>';
+
+  await Promise.all([loadIntersectionsList(), loadShiftsList()]);
+}
+
+async function loadIntersectionsList() {
+  const listBox = document.getElementById('intersectionList');
+  const { data, error } = await supabaseClient.from('intersections').select('*').order('name');
+
+  if (error) {
+    listBox.innerHTML = `<p>${error.message}</p>`;
+    return;
+  }
+
+  if (!data?.length) {
+    listBox.innerHTML = '<p>No intersections yet.</p>';
+    return;
+  }
+
+  listBox.innerHTML = data.map((row) => `
+    <div class="list-item">
+      <div>
+        <strong>${row.name}</strong>
+        <div class="muted">${row.code} • ${row.latitude ?? '—'}, ${row.longitude ?? '—'} • ${row.radius_meters ?? 100}m</div>
+      </div>
+      <div class="chip-row">
+        <span class="pill">${row.active ? 'Active' : 'Inactive'}</span>
+        <button type="button" class="secondary small" data-action="edit-intersection" data-id="${row.id}">Edit</button>
+        <button type="button" class="danger small" data-action="delete-intersection" data-id="${row.id}">Delete</button>
+      </div>
+    </div>
+  `).join('');
+
+  listBox.querySelectorAll('[data-action="edit-intersection"]').forEach((button) => {
+    button.addEventListener('click', () => editIntersection(button.dataset.id));
+  });
+
+  listBox.querySelectorAll('[data-action="delete-intersection"]').forEach((button) => {
+    button.addEventListener('click', () => deleteIntersection(button.dataset.id));
+  });
+}
+
+async function loadShiftsList() {
+  const listBox = document.getElementById('shiftList');
+  const { data, error } = await supabaseClient.from('shifts').select('*').order('name');
+
+  if (error) {
+    listBox.innerHTML = `<p>${error.message}</p>`;
+    return;
+  }
+
+  if (!data?.length) {
+    listBox.innerHTML = '<p>No shifts yet.</p>';
+    return;
+  }
+
+  listBox.innerHTML = data.map((row) => `
+    <div class="list-item">
+      <div>
+        <strong>${row.name}</strong>
+        <div class="muted">${row.start_time} - ${row.end_time}</div>
+      </div>
+      <div class="chip-row">
+        <span class="pill">${row.active ? 'Active' : 'Inactive'}</span>
+        <button type="button" class="secondary small" data-action="edit-shift" data-id="${row.id}">Edit</button>
+        <button type="button" class="danger small" data-action="delete-shift" data-id="${row.id}">Delete</button>
+      </div>
+    </div>
+  `).join('');
+
+  listBox.querySelectorAll('[data-action="edit-shift"]').forEach((button) => {
+    button.addEventListener('click', () => editShift(button.dataset.id));
+  });
+
+  listBox.querySelectorAll('[data-action="delete-shift"]').forEach((button) => {
+    button.addEventListener('click', () => deleteShift(button.dataset.id));
+  });
+}
+
+async function handleIntersectionSubmit(event) {
+  event.preventDefault();
+  const name = document.getElementById('intersectionName').value.trim();
+  const code = document.getElementById('intersectionCode').value.trim();
+  const lat = document.getElementById('intersectionLat').value;
+  const lng = document.getElementById('intersectionLng').value;
+  const radius = document.getElementById('intersectionRadius').value;
+  const active = document.getElementById('intersectionActive').checked;
+  const messageBoxEl = document.getElementById('intersectionMessage');
+
+  if (!name || !code) {
+    messageBoxEl.textContent = 'Name and code are required.';
+    return;
+  }
+
+  const payload = {
+    name,
+    code,
+    latitude: lat ? parseFloat(lat) : null,
+    longitude: lng ? parseFloat(lng) : null,
+    radius_meters: radius ? parseInt(radius, 10) : 100,
+    active
+  };
+
+  let error;
+  if (editingIntersectionId) {
+    ({ error } = await supabaseClient.from('intersections').update(payload).eq('id', editingIntersectionId));
+  } else {
+    ({ error } = await supabaseClient.from('intersections').insert([payload]));
+  }
+
+  if (error) {
+    messageBoxEl.textContent = error.message;
+    return;
+  }
+
+  messageBoxEl.textContent = editingIntersectionId ? 'Intersection updated.' : 'Intersection added.';
+  resetIntersectionForm();
+  await loadIntersectionsList();
+}
+
+async function handleShiftSubmit(event) {
+  event.preventDefault();
+  const name = document.getElementById('shiftName').value.trim();
+  const startTime = document.getElementById('shiftStart').value.trim();
+  const endTime = document.getElementById('shiftEnd').value.trim();
+  const active = document.getElementById('shiftActive').checked;
+  const messageBoxEl = document.getElementById('shiftMessage');
+
+  if (!name || !startTime || !endTime) {
+    messageBoxEl.textContent = 'All shift fields are required.';
+    return;
+  }
+
+  const payload = { name, start_time: startTime, end_time: endTime, active };
+
+  let error;
+  if (editingShiftId) {
+    ({ error } = await supabaseClient.from('shifts').update(payload).eq('id', editingShiftId));
+  } else {
+    ({ error } = await supabaseClient.from('shifts').insert([payload]));
+  }
+
+  if (error) {
+    messageBoxEl.textContent = error.message;
+    return;
+  }
+
+  messageBoxEl.textContent = editingShiftId ? 'Shift updated.' : 'Shift added.';
+  resetShiftForm();
+  await loadShiftsList();
+}
+
+async function editIntersection(id) {
+  const { data, error } = await supabaseClient.from('intersections').select('*').eq('id', id).single();
+  if (error) {
+    document.getElementById('intersectionMessage').textContent = error.message;
+    return;
+  }
+
+  editingIntersectionId = id;
+  document.getElementById('intersectionId').value = id;
+  document.getElementById('intersectionName').value = data.name || '';
+  document.getElementById('intersectionCode').value = data.code || '';
+  document.getElementById('intersectionLat').value = data.latitude ?? '';
+  document.getElementById('intersectionLng').value = data.longitude ?? '';
+  document.getElementById('intersectionRadius').value = data.radius_meters ?? 100;
+  document.getElementById('intersectionActive').checked = data.active !== false;
+  document.getElementById('intersectionSubmitBtn').textContent = 'Update Intersection';
+  document.getElementById('cancelIntersectionEdit').classList.remove('hidden');
+  document.getElementById('intersectionName').focus();
+}
+
+async function editShift(id) {
+  const { data, error } = await supabaseClient.from('shifts').select('*').eq('id', id).single();
+  if (error) {
+    document.getElementById('shiftMessage').textContent = error.message;
+    return;
+  }
+
+  editingShiftId = id;
+  document.getElementById('shiftId').value = id;
+  document.getElementById('shiftName').value = data.name || '';
+  document.getElementById('shiftStart').value = data.start_time || '';
+  document.getElementById('shiftEnd').value = data.end_time || '';
+  document.getElementById('shiftActive').checked = data.active !== false;
+  document.getElementById('shiftSubmitBtn').textContent = 'Update Shift';
+  document.getElementById('cancelShiftEdit').classList.remove('hidden');
+  document.getElementById('shiftName').focus();
+}
+
+async function deleteIntersection(id) {
+  if (!window.confirm('Delete this intersection?')) return;
+  const { error } = await supabaseClient.from('intersections').delete().eq('id', id);
+  if (error) {
+    document.getElementById('intersectionMessage').textContent = error.message;
+    return;
+  }
+  document.getElementById('intersectionMessage').textContent = 'Intersection deleted.';
+  await loadIntersectionsList();
+}
+
+async function deleteShift(id) {
+  if (!window.confirm('Delete this shift?')) return;
+  const { error } = await supabaseClient.from('shifts').delete().eq('id', id);
+  if (error) {
+    document.getElementById('shiftMessage').textContent = error.message;
+    return;
+  }
+  document.getElementById('shiftMessage').textContent = 'Shift deleted.';
+  await loadShiftsList();
+}
+
+function resetIntersectionForm() {
+  editingIntersectionId = null;
+  intersectionForm.reset();
+  document.getElementById('intersectionSubmitBtn').textContent = 'Add Intersection';
+  document.getElementById('cancelIntersectionEdit').classList.add('hidden');
+  document.getElementById('intersectionActive').checked = true;
+}
+
+function resetShiftForm() {
+  editingShiftId = null;
+  shiftForm.reset();
+  document.getElementById('shiftSubmitBtn').textContent = 'Add Shift';
+  document.getElementById('cancelShiftEdit').classList.add('hidden');
+  document.getElementById('shiftActive').checked = true;
 }
 
 function updateGpsStatus() {

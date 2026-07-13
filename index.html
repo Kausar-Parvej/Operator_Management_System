@@ -67,6 +67,56 @@
           </div>
 
           <div class="card">
+            <h3>Manage Intersections</h3>
+            <form id="intersectionForm" class="stack-form">
+              <input id="intersectionId" type="hidden" />
+              <div class="form-grid">
+                <input id="intersectionName" type="text" placeholder="Intersection name" required />
+                <input id="intersectionCode" type="text" placeholder="Code" required />
+              </div>
+              <div class="form-grid">
+                <input id="intersectionLat" type="number" step="any" placeholder="Latitude" />
+                <input id="intersectionLng" type="number" step="any" placeholder="Longitude" />
+              </div>
+              <div class="form-grid">
+                <input id="intersectionRadius" type="number" min="0" placeholder="Radius (m)" />
+                <label class="inline-check">
+                  <input id="intersectionActive" type="checkbox" checked />
+                  Active
+                </label>
+              </div>
+              <div class="actions">
+                <button type="submit" id="intersectionSubmitBtn">Add Intersection</button>
+                <button type="button" id="cancelIntersectionEdit" class="secondary hidden">Cancel</button>
+              </div>
+            </form>
+            <p id="intersectionMessage" class="message"></p>
+            <div id="intersectionList" class="list-box"></div>
+          </div>
+
+          <div class="card">
+            <h3>Manage Shifts</h3>
+            <form id="shiftForm" class="stack-form">
+              <input id="shiftId" type="hidden" />
+              <div class="form-grid">
+                <input id="shiftName" type="text" placeholder="Shift name" required />
+                <input id="shiftStart" type="text" placeholder="Start time" required />
+                <input id="shiftEnd" type="text" placeholder="End time" required />
+              </div>
+              <div class="actions">
+                <label class="inline-check">
+                  <input id="shiftActive" type="checkbox" checked />
+                  Active
+                </label>
+                <button type="submit" id="shiftSubmitBtn">Add Shift</button>
+                <button type="button" id="cancelShiftEdit" class="secondary hidden">Cancel</button>
+              </div>
+            </form>
+            <p id="shiftMessage" class="message"></p>
+            <div id="shiftList" class="list-box"></div>
+          </div>
+
+          <div class="card">
             <h3>Live Duty List</h3>
             <div id="adminList"></div>
           </div>
