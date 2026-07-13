@@ -1,5 +1,12 @@
-const config = window.__SUPABASE_CONFIG__;
-const supabase = createClient(config.url, config.anonKey);
+const config = window.__SUPABASE_CONFIG__ || {};
+
+if (!config.url || !config.anonKey || config.url.includes('YOUR_') || config.anonKey.includes('YOUR_')) {
+  console.error('Supabase config is not set yet. Update config.js with your real project URL and anon key.');
+}
+
+const supabaseClient = (window.supabase && typeof window.supabase.createClient === 'function')
+  ? window.supabase.createClient(config.url || '', config.anonKey || '')
+  : null;
 
 let currentUser = null;
 let currentProfile = null;
@@ -14,12 +21,27 @@ const welcomeTitle = document.getElementById('welcomeTitle');
 const userMeta = document.getElementById('userMeta');
 const logoutBtn = document.getElementById('logoutBtn');
 
+function ensureSupabaseReady() {
+  if (!supabaseClient) {
+    messageBox.textContent = 'Supabase did not initialize properly. Check the config and connection.';
+    return false;
+  }
+  return true;
+}
+
 loginForm.addEventListener('submit', async (event) => {
   event.preventDefault();
   const email = document.getElementById('email').value.trim();
   const password = document.getElementById('password').value;
 
-  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+  if (!ensureSupabaseReady()) return;
+
+  if (!config.url || !config.anonKey || config.url.includes('YOUR_') || config.anonKey.includes('YOUR_')) {
+    messageBox.textContent = 'Supabase is not configured yet. Update config.js first.';
+    return;
+  }
+
+  const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
   if (error) {
     messageBox.textContent = error.message;
     return;
@@ -30,12 +52,12 @@ loginForm.addEventListener('submit', async (event) => {
 });
 
 logoutBtn.addEventListener('click', async () => {
-  await supabase.auth.signOut();
+  await supabaseClient.auth.signOut();
   authSection.classList.remove('hidden');
   appSection.classList.add('hidden');
 });
 
-supabase.auth.onAuthStateChange(async (_event, session) => {
+supabaseClient.auth.onAuthStateChange(async (_event, session) => {
   if (!session) {
     authSection.classList.remove('hidden');
     appSection.classList.add('hidden');
@@ -49,7 +71,7 @@ supabase.auth.onAuthStateChange(async (_event, session) => {
 async function loadProfile() {
   if (!currentUser) return;
 
-  const { data: profile, error } = await supabase
+  const { data: profile, error } = await supabaseClient
     .from('profiles')
     .select('*')
     .eq('id', currentUser.id)
@@ -81,8 +103,8 @@ async function loadProfile() {
 async function loadOperatorView() {
   const shiftSelect = document.getElementById('shiftSelect');
   const intersectionSelect = document.getElementById('intersectionSelect');
-  const { data: shifts } = await supabase.from('shifts').select('*').eq('active', true).order('id');
-  const { data: intersections } = await supabase.from('intersections').select('*').eq('active', true).order('name');
+  const { data: shifts } = await supabaseClient.from('shifts').select('*').eq('active', true).order('id');
+  const { data: intersections } = await supabaseClient.from('intersections').select('*').eq('active', true).order('name');
 
   shiftSelect.innerHTML = '';
   shifts?.forEach((shift) => {
@@ -118,7 +140,7 @@ async function handleShiftIn() {
     return;
   }
 
-  const { data: existing } = await supabase
+  const { data: existing } = await supabaseClient
     .from('attendance')
     .select('id')
     .eq('intersection_id', intersectionId)
@@ -132,7 +154,7 @@ async function handleShiftIn() {
   }
 
   const position = await getPosition();
-  const { data: intersectionRow } = await supabase
+  const { data: intersectionRow } = await supabaseClient
     .from('intersections')
     .select('*')
     .eq('id', intersectionId)
@@ -151,7 +173,7 @@ async function handleShiftIn() {
   }
 
   const ip = await getClientIp();
-  const { error } = await supabase.from('attendance').insert([
+  const { error } = await supabaseClient.from('attendance').insert([
     {
       operator_id: currentUser.id,
       intersection_id: intersectionId,
@@ -179,7 +201,7 @@ async function handleShiftIn() {
 
 async function handleShiftOut() {
   const messageBoxEl = document.getElementById('operatorMessage');
-  const { data: activeRows } = await supabase
+  const { data: activeRows } = await supabaseClient
     .from('attendance')
     .select('*')
     .eq('operator_id', currentUser.id)
@@ -194,7 +216,7 @@ async function handleShiftOut() {
   }
 
   const position = await getPosition();
-  const { error } = await supabase.from('attendance').update({
+  const { error } = await supabaseClient.from('attendance').update({
     shift_out_at: new Date().toISOString(),
     status: 'completed',
     gps_lat_out: position.coords.latitude,
@@ -214,7 +236,7 @@ async function handleShiftOut() {
 
 async function loadOperatorHistory() {
   const historyBox = document.getElementById('operatorHistory');
-  const { data, error } = await supabase
+  const { data, error } = await supabaseClient
     .from('attendance')
     .select('*, shifts(name), intersections(name)')
     .eq('operator_id', currentUser.id)
@@ -243,15 +265,15 @@ async function loadOperatorHistory() {
 }
 
 async function loadAdminView() {
-  const { count: operatorCount } = await supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('role', 'operator');
-  const { count: intersectionCount } = await supabase.from('intersections').select('*', { count: 'exact', head: true });
-  const { count: activeCount } = await supabase.from('attendance').select('*', { count: 'exact', head: true }).eq('status', 'on-duty');
+  const { count: operatorCount } = await supabaseClient.from('profiles').select('*', { count: 'exact', head: true }).eq('role', 'operator');
+  const { count: intersectionCount } = await supabaseClient.from('intersections').select('*', { count: 'exact', head: true });
+  const { count: activeCount } = await supabaseClient.from('attendance').select('*', { count: 'exact', head: true }).eq('status', 'on-duty');
 
   document.getElementById('metricOperators').textContent = operatorCount || 0;
   document.getElementById('metricIntersections').textContent = intersectionCount || 0;
   document.getElementById('metricActive').textContent = activeCount || 0;
 
-  const { data } = await supabase
+  const { data } = await supabaseClient
     .from('attendance')
     .select('*, profiles(full_name), intersections(name), shifts(name)')
     .order('created_at', { ascending: false })
