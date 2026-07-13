@@ -521,29 +521,30 @@ async function handleOperatorRegistration(event) {
     return;
   }
 
-  const { data: signUpData, error: signUpError } = await supabaseClient.auth.signUp({ email, password });
+  const { data: signUpData, error: signUpError } = await supabaseClient.auth.signUp({
+    email,
+    password,
+    options: {
+      data: {
+        full_name: fullName,
+        employee_id: employeeId,
+        mobile,
+        role: 'operator',
+        status: 'pending'
+      }
+    }
+  });
+
   if (signUpError) {
     registerMessageBox.textContent = signUpError.message;
     return;
   }
 
   if (signUpData?.user) {
-    const { error: profileError } = await supabaseClient.from('profiles').insert([{ 
-      id: signUpData.user.id,
-      role: 'operator',
-      full_name: fullName,
-      employee_id: employeeId,
-      mobile,
-      status: 'pending'
-    }]);
-
-    if (profileError) {
-      registerMessageBox.textContent = profileError.message;
-      return;
-    }
+    registerMessageBox.textContent = 'Registration submitted. Please wait for admin approval.';
+  } else {
+    registerMessageBox.textContent = 'Registration submitted. Please check your email if confirmation is enabled.';
   }
-
-  registerMessageBox.textContent = 'Registration submitted. Please wait for admin approval.';
   registerForm.reset();
   registerForm.classList.add('hidden');
   loginForm.classList.remove('hidden');

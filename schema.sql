@@ -58,6 +58,40 @@ alter table intersections enable row level security;
 alter table shifts enable row level security;
 alter table attendance enable row level security;
 
+create or replace function public.handle_new_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  insert into public.profiles (
+    id,
+    role,
+    full_name,
+    employee_id,
+    mobile,
+    status
+  )
+  values (
+    new.id,
+    coalesce(new.raw_user_meta_data->>'role', 'operator'),
+    coalesce(new.raw_user_meta_data->>'full_name', ''),
+    coalesce(new.raw_user_meta_data->>'employee_id', ''),
+    coalesce(new.raw_user_meta_data->>'mobile', ''),
+    coalesce(new.raw_user_meta_data->>'status', 'pending')
+  )
+  on conflict (id) do nothing;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created
+after insert on auth.users
+for each row execute function public.handle_new_user();
+
 drop policy if exists "Profiles self and admin" on public.profiles;
 drop policy if exists "Profiles manage own" on public.profiles;
 drop policy if exists "Profiles admin update" on public.profiles;
