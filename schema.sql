@@ -1,11 +1,13 @@
 create extension if not exists "uuid-ossp";
+create extension if not exists pgcrypto;
 
 create table if not exists profiles (
-  id uuid primary key references auth.users(id) on delete cascade,
+  id uuid primary key default uuid_generate_v4(),
   role text not null default 'operator',
   full_name text not null,
   employee_id text,
-  mobile text,
+  mobile text unique,
+  password_hash text not null,
   status text not null default 'active',
   created_at timestamptz default now()
 );
@@ -58,40 +60,6 @@ alter table intersections enable row level security;
 alter table shifts enable row level security;
 alter table attendance enable row level security;
 
-create or replace function public.handle_new_user()
-returns trigger
-language plpgsql
-security definer
-set search_path = public
-as $$
-begin
-  insert into public.profiles (
-    id,
-    role,
-    full_name,
-    employee_id,
-    mobile,
-    status
-  )
-  values (
-    new.id,
-    coalesce(new.raw_user_meta_data->>'role', 'operator'),
-    coalesce(new.raw_user_meta_data->>'full_name', ''),
-    coalesce(new.raw_user_meta_data->>'employee_id', ''),
-    coalesce(new.raw_user_meta_data->>'mobile', ''),
-    coalesce(new.raw_user_meta_data->>'status', 'pending')
-  )
-  on conflict (id) do nothing;
-
-  return new;
-end;
-$$;
-
-drop trigger if exists on_auth_user_created on auth.users;
-create trigger on_auth_user_created
-after insert on auth.users
-for each row execute function public.handle_new_user();
-
 drop policy if exists "Profiles self and admin" on public.profiles;
 drop policy if exists "Profiles manage own" on public.profiles;
 drop policy if exists "Profiles admin update" on public.profiles;
@@ -104,32 +72,101 @@ drop policy if exists "Attendance self or admin" on public.attendance;
 drop policy if exists "Attendance insert own" on public.attendance;
 drop policy if exists "Attendance update own or admin" on public.attendance;
 
-create policy "Profiles read authenticated" on public.profiles
-for select using (auth.role() = 'authenticated');
+create or replace function public.register_operator(
+  p_full_name text,
+  p_employee_id text,
+  p_mobile text,
+  p_password text,
+  p_role text default 'operator',
+  p_status text default 'pending'
+)
+returns table (id uuid, full_name text, employee_id text, mobile text, role text, status text)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_hash text;
+  v_id uuid;
+begin
+  if p_mobile is null or length(trim(p_mobile)) = 0 then
+    raise exception 'Mobile number is required';
+  end if;
 
-create policy "Profiles insert own" on public.profiles
-for insert with check (auth.uid() = id);
+  if p_password is null or length(p_password) < 4 then
+    raise exception 'Password must be at least 4 characters';
+  end if;
 
-create policy "Profiles update own or admin" on public.profiles
-for update using (auth.uid() = id or exists (
-  select 1 from public.profiles admin_profile
-  where admin_profile.id = auth.uid() and admin_profile.role = 'admin'
-));
+  if exists (select 1 from public.profiles where mobile = trim(p_mobile)) then
+    raise exception 'This mobile number is already registered';
+  end if;
 
-create policy "Read intersections" on public.intersections for select using (auth.role() = 'authenticated');
-create policy "Admin manage intersections" on public.intersections for all using (auth.role() = 'authenticated');
+  v_hash := crypt(p_password, gen_salt('bf'));
+  v_id := uuid_generate_v4();
 
-create policy "Read shifts" on public.shifts for select using (auth.role() = 'authenticated');
-create policy "Admin manage shifts" on public.shifts for all using (auth.role() = 'authenticated');
+  insert into public.profiles (
+    id,
+    role,
+    full_name,
+    employee_id,
+    mobile,
+    password_hash,
+    status
+  ) values (
+    v_id,
+    coalesce(p_role, 'operator'),
+    trim(p_full_name),
+    trim(p_employee_id),
+    trim(p_mobile),
+    v_hash,
+    coalesce(p_status, 'pending')
+  );
 
-create policy "Attendance self or admin" on public.attendance for select using (
-  auth.uid() = operator_id or auth.role() = 'authenticated'
-);
+  return query
+  select p.id, p.full_name, p.employee_id, p.mobile, p.role, p.status
+  from public.profiles p
+  where p.id = v_id;
+end;
+$$;
 
-create policy "Attendance insert own" on public.attendance for insert with check (auth.uid() = operator_id);
-create policy "Attendance update own or admin" on public.attendance for update using (
-  auth.uid() = operator_id or auth.role() = 'authenticated'
-);
+create or replace function public.login_operator(p_phone text, p_password text)
+returns table (id uuid, full_name text, employee_id text, mobile text, role text, status text)
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  return query
+  select
+    p.id,
+    p.full_name,
+    p.employee_id,
+    p.mobile,
+    p.role,
+    p.status
+  from public.profiles p
+  where lower(trim(p.mobile)) = lower(trim(p_phone))
+    and p.password_hash = crypt(p_password, p.password_hash);
+end;
+$$;
+
+create policy "Profiles read public" on public.profiles
+for select using (auth.role() = 'anon' or auth.role() = 'authenticated');
+
+create policy "Profiles manage public" on public.profiles
+for all using (auth.role() = 'anon' or auth.role() = 'authenticated')
+with check (auth.role() = 'anon' or auth.role() = 'authenticated');
+
+create policy "Read intersections" on public.intersections for select using (auth.role() = 'anon' or auth.role() = 'authenticated');
+create policy "Admin manage intersections" on public.intersections for all using (auth.role() = 'anon' or auth.role() = 'authenticated')
+with check (auth.role() = 'anon' or auth.role() = 'authenticated');
+
+create policy "Read shifts" on public.shifts for select using (auth.role() = 'anon' or auth.role() = 'authenticated');
+create policy "Admin manage shifts" on public.shifts for all using (auth.role() = 'anon' or auth.role() = 'authenticated')
+with check (auth.role() = 'anon' or auth.role() = 'authenticated');
+
+create policy "Attendance access public" on public.attendance for all using (auth.role() = 'anon' or auth.role() = 'authenticated')
+with check (auth.role() = 'anon' or auth.role() = 'authenticated');
 
 insert into intersections (name, code, latitude, longitude, radius_meters, active)
 values

@@ -52,20 +52,33 @@ loginForm.addEventListener('submit', async (event) => {
     return;
   }
 
-  const { data, error } = await supabaseClient.auth.signInWithPassword({ phone, password });
+  const { data, error } = await supabaseClient.rpc('login_operator', {
+    p_phone: phone,
+    p_password: password
+  });
+
   if (error) {
-    messageBox.textContent = error.message;
+    messageBox.textContent = error.message || 'Login failed.';
     return;
   }
 
-  currentUser = data.user;
+  const profile = Array.isArray(data) ? data[0] : data;
+  if (!profile) {
+    messageBox.textContent = 'Invalid mobile number or password.';
+    return;
+  }
+
+  currentUser = { id: profile.id };
+  currentProfile = profile;
   await loadProfile();
 });
 
-logoutBtn.addEventListener('click', async () => {
-  await supabaseClient.auth.signOut();
+logoutBtn.addEventListener('click', () => {
+  currentUser = null;
+  currentProfile = null;
   authSection.classList.remove('hidden');
   appSection.classList.add('hidden');
+  document.getElementById('password').value = '';
 });
 
 showRegisterBtn.addEventListener('click', () => {
@@ -89,32 +102,10 @@ document.getElementById('cancelIntersectionEdit').addEventListener('click', rese
 shiftForm.addEventListener('submit', handleShiftSubmit);
 document.getElementById('cancelShiftEdit').addEventListener('click', resetShiftForm);
 
-supabaseClient.auth.onAuthStateChange(async (_event, session) => {
-  if (!session) {
-    authSection.classList.remove('hidden');
-    appSection.classList.add('hidden');
-    return;
-  }
-
-  currentUser = session.user;
-  await loadProfile();
-});
-
 async function loadProfile() {
-  if (!currentUser) return;
+  if (!currentUser || !currentProfile) return;
 
-  const { data: profile, error } = await supabaseClient
-    .from('profiles')
-    .select('*')
-    .eq('id', currentUser.id)
-    .single();
-
-  if (error) {
-    messageBox.textContent = error.message;
-    return;
-  }
-
-  currentProfile = profile;
+  const profile = currentProfile;
 
   if (profile.role !== 'admin' && profile.status !== 'active') {
     messageBox.textContent = profile.status === 'pending'
@@ -573,18 +564,13 @@ async function handleOperatorRegistration(event) {
   registerSubmitBtn.disabled = true;
   registerSubmitBtn.textContent = 'Submitting...';
 
-  const { data: signUpData, error: signUpError } = await supabaseClient.auth.signUp({
-    phone: mobile,
-    password,
-    options: {
-      data: {
-        full_name: fullName,
-        employee_id: employeeId,
-        mobile,
-        role: 'operator',
-        status: 'pending'
-      }
-    }
+  const { data: signUpData, error: signUpError } = await supabaseClient.rpc('register_operator', {
+    p_full_name: fullName,
+    p_employee_id: employeeId,
+    p_mobile: mobile,
+    p_password: password,
+    p_role: 'operator',
+    p_status: 'pending'
   });
 
   registerSubmitBtn.disabled = false;
@@ -595,7 +581,7 @@ async function handleOperatorRegistration(event) {
     return;
   }
 
-  if (signUpData?.user) {
+  if (signUpData?.[0]) {
     registerMessageBox.textContent = 'Registration submitted. Please wait for admin approval.';
   } else {
     registerMessageBox.textContent = 'Registration submitted. Please try logging in once the account is ready.';
