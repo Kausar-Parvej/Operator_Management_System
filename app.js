@@ -31,19 +31,6 @@ const registerSubmitBtn = document.getElementById('registerSubmitBtn');
 
 let editingIntersectionId = null;
 let editingShiftId = null;
-let registrationCooldownUntil = 0;
-
-function updateRegistrationButtonState() {
-  const isCoolingDown = Date.now() < registrationCooldownUntil;
-  registerSubmitBtn.disabled = isCoolingDown;
-  registerSubmitBtn.textContent = isCoolingDown ? 'Please wait...' : 'Submit Registration';
-}
-
-function startRegistrationCooldown(seconds = 60) {
-  registrationCooldownUntil = Date.now() + seconds * 1000;
-  updateRegistrationButtonState();
-  window.setTimeout(updateRegistrationButtonState, seconds * 1000);
-}
 
 function ensureSupabaseReady() {
   if (!supabaseClient) {
@@ -55,7 +42,7 @@ function ensureSupabaseReady() {
 
 loginForm.addEventListener('submit', async (event) => {
   event.preventDefault();
-  const email = document.getElementById('email').value.trim();
+  const phone = document.getElementById('phone').value.trim();
   const password = document.getElementById('password').value;
 
   if (!ensureSupabaseReady()) return;
@@ -65,7 +52,7 @@ loginForm.addEventListener('submit', async (event) => {
     return;
   }
 
-  const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+  const { data, error } = await supabaseClient.auth.signInWithPassword({ phone, password });
   if (error) {
     messageBox.textContent = error.message;
     return;
@@ -86,7 +73,6 @@ showRegisterBtn.addEventListener('click', () => {
   loginForm.classList.add('hidden');
   showRegisterBtn.classList.add('hidden');
   registerMessageBox.textContent = '';
-  updateRegistrationButtonState();
 });
 
 cancelRegisterBtn.addEventListener('click', () => {
@@ -95,7 +81,6 @@ cancelRegisterBtn.addEventListener('click', () => {
   showRegisterBtn.classList.remove('hidden');
   registerForm.reset();
   registerMessageBox.textContent = '';
-  updateRegistrationButtonState();
 });
 
 registerForm.addEventListener('submit', handleOperatorRegistration);
@@ -569,19 +554,13 @@ async function handleIntersectionSubmit(event) {
 async function handleOperatorRegistration(event) {
   event.preventDefault();
 
-  if (Date.now() < registrationCooldownUntil) {
-    registerMessageBox.textContent = 'Too many signup attempts. Please wait a minute and try again.';
-    return;
-  }
-
   const fullName = document.getElementById('registerFullName').value.trim();
   const employeeId = document.getElementById('registerEmployeeId').value.trim();
   const mobile = document.getElementById('registerMobile').value.trim();
-  const email = document.getElementById('registerEmail').value.trim();
   const password = document.getElementById('registerPassword').value;
   const confirmPassword = document.getElementById('registerConfirmPassword').value;
 
-  if (!fullName || !employeeId || !mobile || !email || !password || !confirmPassword) {
+  if (!fullName || !employeeId || !mobile || !password || !confirmPassword) {
     registerMessageBox.textContent = 'All fields are required.';
     return;
   }
@@ -591,11 +570,11 @@ async function handleOperatorRegistration(event) {
     return;
   }
 
-  startRegistrationCooldown(60);
+  registerSubmitBtn.disabled = true;
   registerSubmitBtn.textContent = 'Submitting...';
 
   const { data: signUpData, error: signUpError } = await supabaseClient.auth.signUp({
-    email,
+    phone: mobile,
     password,
     options: {
       data: {
@@ -608,24 +587,19 @@ async function handleOperatorRegistration(event) {
     }
   });
 
+  registerSubmitBtn.disabled = false;
+  registerSubmitBtn.textContent = 'Submit Registration';
+
   if (signUpError) {
-    const message = signUpError.message || '';
-    if (message.toLowerCase().includes('rate limit') || message.toLowerCase().includes('rate-limit')) {
-      startRegistrationCooldown(120);
-      registerMessageBox.textContent = 'Signup is temporarily rate-limited by Supabase. Please wait about 2 minutes and try again.';
-    } else {
-      registerMessageBox.textContent = message;
-    }
-    registerSubmitBtn.textContent = 'Submit Registration';
+    registerMessageBox.textContent = signUpError.message || 'Registration failed. Please try again.';
     return;
   }
 
   if (signUpData?.user) {
     registerMessageBox.textContent = 'Registration submitted. Please wait for admin approval.';
   } else {
-    registerMessageBox.textContent = 'Registration submitted. Please check your email if confirmation is enabled.';
+    registerMessageBox.textContent = 'Registration submitted. Please try logging in once the account is ready.';
   }
-  registerSubmitBtn.textContent = 'Submit Registration';
   registerForm.reset();
   registerForm.classList.add('hidden');
   loginForm.classList.remove('hidden');
