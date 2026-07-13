@@ -1,5 +1,4 @@
 create extension if not exists "uuid-ossp";
-create extension if not exists pgcrypto;
 
 create table if not exists profiles (
   id uuid primary key default uuid_generate_v4(),
@@ -63,6 +62,8 @@ alter table attendance enable row level security;
 drop policy if exists "Profiles self and admin" on public.profiles;
 drop policy if exists "Profiles manage own" on public.profiles;
 drop policy if exists "Profiles admin update" on public.profiles;
+drop policy if exists "Profiles read public" on public.profiles;
+drop policy if exists "Profiles manage public" on public.profiles;
 
 drop policy if exists "Read intersections" on public.intersections;
 drop policy if exists "Admin manage intersections" on public.intersections;
@@ -71,6 +72,7 @@ drop policy if exists "Admin manage shifts" on public.shifts;
 drop policy if exists "Attendance self or admin" on public.attendance;
 drop policy if exists "Attendance insert own" on public.attendance;
 drop policy if exists "Attendance update own or admin" on public.attendance;
+drop policy if exists "Attendance access public" on public.attendance;
 
 create or replace function public.register_operator(
   p_full_name text,
@@ -86,7 +88,6 @@ security definer
 set search_path = public
 as $$
 declare
-  v_hash text;
   v_id uuid;
 begin
   if p_mobile is null or length(trim(p_mobile)) = 0 then
@@ -101,7 +102,6 @@ begin
     raise exception 'This mobile number is already registered';
   end if;
 
-  v_hash := crypt(p_password, gen_salt('bf'));
   v_id := uuid_generate_v4();
 
   insert into public.profiles (
@@ -118,7 +118,7 @@ begin
     trim(p_full_name),
     trim(p_employee_id),
     trim(p_mobile),
-    v_hash,
+    p_password,
     coalesce(p_status, 'pending')
   );
 
@@ -146,7 +146,7 @@ begin
     p.status
   from public.profiles p
   where lower(trim(p.mobile)) = lower(trim(p_phone))
-    and p.password_hash = crypt(p_password, p.password_hash);
+    and p.password_hash = p_password;
 end;
 $$;
 
